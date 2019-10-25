@@ -1,0 +1,381 @@
+#include<stdio.h>
+#define SIZE 3
+
+//ME
+
+__global__ void MatrixMul(int a[], int b[], int c[], int n) 
+{
+	int tx = threadIdx.x;
+	int ty = threadIdx.y;
+
+	int result = 0;
+
+    	for(int i = 0; i < SIZE ; i++) 
+    	{
+        	int p = *(a + ty*SIZE + i);
+        	int q = *(b + i*SIZE + tx);
+        	result = result + (p*q);
+    	}
+
+    	*(c + ty*SIZE + tx) = result;
+}
+int main() 
+{    
+	time_t t;
+	srand((unsigned) time(&t));
+	
+	int *a, *b, *c;
+	
+	a = (int*)malloc(SIZE * SIZE * sizeof(int));
+	b = (int*)malloc(SIZE * SIZE * sizeof(int));
+	c = (int*)malloc(SIZE * SIZE * sizeof(int));
+	
+    	for(int i = 0; i < SIZE ; i++) 
+    	{
+        	for(int j = 0; j < SIZE ; j++) 
+        	{
+        		*(a + i*SIZE + j) = i;
+        		*(b + i*SIZE + j) = i+j;
+        	}
+    	}
+    
+	int *d_a, *d_b, *d_c;
+
+    	cudaMalloc(&d_a, SIZE * SIZE * sizeof(int));
+    	cudaMalloc(&d_b, SIZE * SIZE * sizeof(int));
+    	cudaMalloc(&d_c, SIZE * SIZE * sizeof(int));
+    	
+    	cudaMemcpy(d_a, a, SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
+    	cudaMemcpy(d_b, b, SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
+      
+ 
+      dim3 thread_b(SIZE,SIZE,1);
+    	MatrixMul <<<1, thread_b>>> (d_a, d_b, d_c, SIZE);
+    	
+    	cudaDeviceSynchronize();
+
+    	cudaMemcpy(c, d_c, SIZE * SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+    
+    	printf("1st matrix: \n");
+	for (int i = 0; i < SIZE; i++)
+	{
+		for(int j = 0; j < SIZE; j++)
+		{
+			printf("%d ", *(a + i*SIZE + j));
+		}
+		printf("\n");
+	}
+	printf("2nd matrix: \n");
+	for (int i = 0; i < SIZE; i++)
+	{
+		for(int j = 0; j < SIZE; j++)
+		{
+			printf("%d ", *(b + i*SIZE + j));
+		}
+		printf("\n");
+	}
+	printf("Product: \n");
+	for (int i = 0; i < SIZE; i++)
+	{
+		for(int j = 0; j < SIZE; j++)
+		{
+			printf("%d ", *(c + i*SIZE + j));
+		}
+		printf("\n");
+	}
+
+	cudaFree(d_a);
+	cudaFree(d_b);
+	cudaFree(d_c);
+	
+	free(a);
+	free(b);
+	free(c);
+
+   
+    	return 0;
+}  
+
+
+%%cu
+
+#include<stdio.h>
+#include "cuda_runtime.h"
+#define N 5
+
+//ME
+
+__global__ void mat_vec(int* a, int* b, int* c)
+{
+    int tid = threadIdx.x;
+    for(int i=0;i<N;i++)
+    {
+        c[tid] = c[tid] + (a[i]* *(b + tid*N + i));
+    }
+}
+
+
+int main()
+{
+    
+      
+    int* a;
+    int* b;
+    int* c;
+    
+    int* d_a;
+    int* d_b;
+    int* d_c;
+    
+    a = (int*)malloc(N*sizeof(int));
+    b = (int*)malloc(N*N*sizeof(int));
+    c = (int*)malloc(N*sizeof(int));
+    
+    
+      for(int i=0;i<N;i++)
+    {
+        a[i] = i;
+        for(int j=0;j<N;j++)
+        {
+            *(b+i*N + j) = i+j;
+        }
+    }
+
+     printf("\nPrinting a\n");
+  
+     for(int i=0;i<N;i++)
+    {
+        printf("%d\t", a[i]);
+    }
+    
+    
+    printf("\nPrinting b\n");
+     for(int i=0;i<N;i++)
+    {
+        for(int j=0;j<N;j++)
+        {
+           printf("%d\t",*(b + i*N + j));
+        }
+        printf("\n");
+        
+    }
+    cudaMalloc(&d_a, N * sizeof(int));
+    cudaMalloc(&d_b, N * N * sizeof(int));
+    cudaMalloc(&d_c, N * sizeof(int));
+    
+    cudaMemcpy(d_a,a,N*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b,b,N*N*sizeof(int), cudaMemcpyHostToDevice);
+    mat_vec<<<1,N>>> (d_a,d_b,d_c);
+    cudaMemcpy(c,d_c,N*sizeof(int), cudaMemcpyDeviceToHost);
+    
+    printf("\nPrinting c\n");
+    
+    for(int i=0;i<N;i++)
+    {
+        printf("%d\t",c[i]);
+    }
+    
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_c);
+    free(a);
+    free(b);
+    free(c);
+
+}
+
+%%cu
+
+
+#include<stdio.h>
+#define N 8
+
+//ME
+
+__global__ void vect_sum(int* a, int* b, int* c, int n)
+{
+    int tid = threadIdx.x + blockDim.x*blockIdx.x;
+    
+    if(tid<n)
+    {
+        c[tid] = a[tid] + b[tid];
+    }
+    
+}
+
+
+int main()
+{
+    
+    int* a;
+    int* b;
+    int* c;
+    
+    a = (int*)malloc(N*sizeof(int));
+    b = (int*)malloc(N*sizeof(int));
+    c = (int*)malloc(N*sizeof(int));
+    
+    for(int i=0;i<N;i++)
+    {
+        a[i] = i;
+        b[i] = i+1;
+        
+        
+    }
+    
+    printf("\nPrinting a\n");
+    for(int i=0;i<N;i++)
+    {
+        printf("%d\t",a[i]);
+    }
+    
+    printf("\nPrinting b\n");
+    
+    
+    for(int i=0;i<N;i++)
+    {
+        printf("%d\t",b[i]);
+    }
+    int* d_a;
+    int* d_b;
+    int* d_c;
+    
+    printf("\n");
+    cudaMalloc(&d_a, N*sizeof(int));
+    cudaMalloc(&d_b, N*sizeof(int));
+    cudaMalloc(&d_c , N*sizeof(int));
+
+    cudaMemcpy(d_a,a,N*sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b,b, N*sizeof(int),cudaMemcpyHostToDevice);
+    
+    vect_sum <<<2, N/2>>> (d_a,d_b,d_c,N);
+    cudaMemcpy(c,d_c,N*sizeof(int) , cudaMemcpyDeviceToHost);
+    for(int i=0;i<N;i++)
+    {
+        printf("%d\t", c[i]);
+    }
+    
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_c);
+    free(a);
+    free(b);
+    free(c);
+    
+    
+}
+
+
+%%cu
+#include<stdio.h>
+#include<math.h>
+#define N 4
+
+
+//ME
+
+__global__ void findAvg(float* input)
+{
+    
+    int tid = threadIdx.x;
+    int num_threads = blockDim.x;
+    int step = 1;
+    while(num_threads>0)
+    {
+        if(tid < num_threads)
+        {
+            int fst = tid*step*2;
+            int lst = fst + step;
+            input[fst] = input[fst] + input[lst];
+            
+        }
+        
+        num_threads >>=1;
+        step <<=1;
+        __syncthreads();
+    }
+    
+}
+
+__global__ void findDiff(float* input , float num)
+{
+    int tid = threadIdx.x;
+    if(tid < N)
+    {
+        input[tid] = input[tid] - num;
+    }
+    
+}
+
+
+int main()
+{
+    time_t t;
+    srand((unsigned)time(&t));
+    float *h;
+    h = (float*)malloc(N*sizeof(float));
+    for(int i=0;i<N;i++)
+    {
+        h[i] = rand()%N;
+        printf("%f ",h[i]);
+    }
+    
+    
+    
+    float* d;
+    cudaMalloc(&d , N*sizeof(float));
+    cudaMemcpy(d,h,N*sizeof(float) , cudaMemcpyHostToDevice);
+    findAvg  <<<1, N/2 >>>(d);
+    float* result;
+    result = (float*)malloc(sizeof(float));
+    cudaMemcpy(result, d, sizeof(float) , cudaMemcpyDeviceToHost);
+    printf("Average %f\n" ,result[0]/(float)N);
+    float avg = result[0]/(float)N; 
+    
+    
+    float* g;
+    cudaMalloc(&g, N*sizeof(float));
+    cudaMemcpy(g,h , N*sizeof(float) , cudaMemcpyHostToDevice);
+    findDiff<<<1,N>>>(g ,avg );
+    cudaDeviceSynchronize();
+    
+    float* difference;
+    difference = (float*)malloc(N*sizeof(float));
+    cudaMemcpy(difference, g, N*sizeof(float) , cudaMemcpyDeviceToHost);
+    for(int i=0;i<N;i++)
+    {
+        printf("%f\t",difference[i]);
+        difference[i] = difference[i]*difference[i];
+    }
+    
+    printf("Printing Squares\n");
+    for(int i=0;i<N;i++)
+    {
+        printf("%f\t",difference[i]);
+        
+    }
+    
+    float* d_new;
+    cudaMalloc(&d_new, N*sizeof(float));
+    cudaMemcpy(d_new, difference, N*sizeof(float) , cudaMemcpyHostToDevice);
+    
+    findAvg<<<1,N/2>>> (d_new);
+    cudaDeviceSynchronize();
+    float* result_new;
+    result_new = (float*)malloc(sizeof(float));
+    
+    cudaMemcpy(result_new, d_new, sizeof(float), cudaMemcpyDeviceToHost);
+    printf("Variance %f\n" ,result_new[0]/N);    
+    
+    
+    printf("Standard Deviation %f",sqrt(result_new[0]/N));
+    
+    
+    
+    
+    cudaFree(g);
+    cudaFree(d);
+    free(h);
+    return(0);
+    
+}
